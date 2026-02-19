@@ -1,0 +1,11 @@
+[project]
+name = "jakubs_neural_util"
+version = "0.1.0"
+description = "My utilities for training neural networks"
+authors = [{ name = "Jakub" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [ "torch >=2.5.1, <2.6" ]
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
