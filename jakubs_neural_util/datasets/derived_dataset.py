@@ -2,29 +2,32 @@ from abc import ABC, abstractmethod
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Generic, Optional, Tuple, List, Dict, Any, TypeVar, cast, Union, TypedDict
+from typing import Generic, Literal, Optional, Tuple, List, Dict, Any, Type, TypeVar, cast, Union, TypedDict, get_args
 
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
 import random
 
-from jakubs_neural_util.datasets.cached_dataset import CachedDataset
+from jakubs_neural_util.datasets.cached_dataset import CachedDataset, SourceType as CSourceType
 
-InputType = TypeVar("InputType")
+
 TensorType = TypeVar("TensorType")
-ParamsType = TypeVar("ParamsType")
 
 SourceTensorType = TypeVar("SourceTensorType")
 SourceParamsType = TypeVar("SourceParamsType")
 SourceItemType = TypeVar("SourceItemType")
 
 
+TTypeVarStaticTensor = TypeVar("TTypeVarStaticTensor")
 @dataclass
 class DerivedItemMapping():
     source_indices: list[int]
 
-class DerivedDataset(CachedDataset[DerivedItemMapping, list[SourceParamsType], TensorType], Generic[SourceParamsType, TensorType, SourceItemType]):
+
+class DerivedDataset(
+    CachedDataset[DerivedItemMapping, list[SourceParamsType], TensorType],
+    Generic[TensorType, SourceItemType, SourceParamsType, SourceTensorType]):
     """
         This dataset creates its items from another dataset. Typical use would be image pairing,
         creating more image variants etc. Requires CachedDataset, and this means both variants
@@ -54,6 +57,10 @@ class DerivedDataset(CachedDataset[DerivedItemMapping, list[SourceParamsType], T
 
         self.items: List[DerivedItemMapping] = []
 
+    @staticmethod
+    def get_type(base: Type[CachedDataset[SourceParamsType, SourceItemType, SourceTensorType]], tensorType: TTypeVarStaticTensor):
+        return DerivedDataset[TTypeVarStaticTensor, SourceParamsType, SourceItemType, SourceTensorType]
+
     @abstractmethod
     def create_items(self) -> List[DerivedItemMapping]:
         pass
@@ -78,3 +85,46 @@ class DerivedDataset(CachedDataset[DerivedItemMapping, list[SourceParamsType], T
     @abstractmethod
     def load_item(self, item: DerivedItemMapping) -> TensorType:
         pass
+
+INHSourceType = TypeVar("INHSourceType", covariant=True)
+INHItemType = TypeVar("INHItemType")
+INHTensorType = TypeVar("INHTensorType")
+INHFinalTensorType = TypeVar("INHFinalTensorType")
+def DerivedDataset_inherit(
+        sourceType: Type[CachedDataset[INHSourceType, INHItemType, INHTensorType]],
+        tensorType: Type[INHFinalTensorType])->Type[DerivedDataset[INHFinalTensorType, INHSourceType, INHItemType, INHTensorType]]:
+    return DerivedDataset # type: ignore
+
+# class TestDerived(CachedDataset[Literal["source_type"], Literal["params_type"], Literal["tensor_type"]]):
+#     def create_items(self) -> List[Literal["source_type"]]:
+#         raise NotImplementedError
+
+#     def get_item_info(self, item: Literal["source_type"]) -> Tuple[Literal["params_type"], List[Path] | None]:
+#         raise NotImplementedError
+
+#     def load_item(self, item: Literal["source_type"]) ->  Literal["tensor_type"]:
+#         raise NotImplementedError
+
+#     def init_items(self):
+#         raise NotImplementedError
+
+
+# class TestDerivedImpl(DerivedDataset_inherit(TestDerived, list[float])):
+#     def __init__(self, source: TestDerived):
+#         super(TestDerivedImpl, self).__init__(source=source)
+
+#     def create_items(self) -> List[DerivedItemMapping]:
+#         raise NotImplementedError
+
+#     def load_item(self, item: DerivedItemMapping):
+#         raise NotImplementedError
+
+#     def init_items(self):
+#         raise NotImplementedError
+
+# # testDerInst = TestDerived()
+# # derivedInst = DerivedDataset(testDerInst, Type[list[float]])
+
+# implTest = TestDerivedImpl(TestDerived())
+
+# implTest.source.get_item_info("source_type")

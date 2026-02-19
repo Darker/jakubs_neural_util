@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from pathlib import Path
-from typing import Generic, Optional, Tuple, List, Dict, Any, TypeVar, cast, Union, TypedDict
+from typing import Generic, Optional, Tuple, List, Dict, Any, TypeVar, cast, Union, TypedDict, TYPE_CHECKING
 
 import torch.nn.functional as F
 from torch.utils.data import Dataset
@@ -29,6 +29,8 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
             subrange (Optional[Tuple[int,int]]): Optional (start, end) indices to restrict dataset.
         """
 
+        self.sourceTypeHelper: SourceType = None # type: ignore
+
         self.items: List[SourceType] = []
 
         self.did_init = False
@@ -37,6 +39,12 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
             self.cache_system: Optional[TensorCache[TensorType]] = TensorCache(cache_dir, 500*(1024**3))
         else:
             self.cache_system = None
+
+    def _typing_source_type(self) -> SourceType:
+        if TYPE_CHECKING:
+            return self.items[0]
+        else:
+            raise SyntaxError("Cannot call type helper in runtime!")
 
     @abstractmethod
     def create_items(self) -> List[SourceType]:

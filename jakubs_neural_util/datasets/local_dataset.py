@@ -13,10 +13,10 @@ from jakubs_neural_util.datasets.tensor_hashing import hash_dataset_entry
 from jakubs_neural_util.datasets.tensor_cache import TensorCache
 
 SourceType = TypeVar("SourceType")
-ItemType = TypeVar("ItemType")
+TensorType = TypeVar("TensorType")
 ParamsType = TypeVar("ParamsType")
 
-class LocalDataset(CachedDataset[SourceType, ParamsType, ItemType], Generic[SourceType, ParamsType, ItemType]):
+class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[SourceType, ParamsType, TensorType]):
     def __init__(self, 
                  folder: str,
                  *,
@@ -61,7 +61,7 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, ItemType], Generic[Sour
         pass
 
     @abstractmethod
-    def load_item(self, item: SourceType) -> ItemType:
+    def load_item(self, item: SourceType) -> TensorType:
         pass
 
     def apply_range_shuffle(self):
