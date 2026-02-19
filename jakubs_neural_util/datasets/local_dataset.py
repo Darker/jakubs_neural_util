@@ -8,6 +8,7 @@ from torch.utils.data import Dataset
 
 import random
 
+from jakubs_neural_util.datasets.cached_dataset import CachedDataset
 from jakubs_neural_util.datasets.tensor_hashing import hash_dataset_entry
 from jakubs_neural_util.datasets.tensor_cache import TensorCache
 
@@ -15,7 +16,7 @@ SourceType = TypeVar("SourceType")
 ItemType = TypeVar("ItemType")
 ParamsType = TypeVar("ParamsType")
 
-class LocalDataset(Generic[SourceType, ParamsType, ItemType], Dataset[ItemType], ABC):
+class LocalDataset(CachedDataset[SourceType, ParamsType, ItemType], Generic[SourceType, ParamsType, ItemType]):
     def __init__(self, 
                  folder: str,
                  *,
@@ -31,6 +32,7 @@ class LocalDataset(Generic[SourceType, ParamsType, ItemType], Dataset[ItemType],
             is_validation (bool): Flag for validation split.
             subrange (Optional[Tuple[int,int]]): Optional (start, end) indices to restrict dataset.
         """
+        super().__init__(cache_dir=cache_dir)
         self.folder = Path(folder)
         self.is_validation = is_validation
         self.shuffle_seed = shuffle_seed
@@ -42,13 +44,6 @@ class LocalDataset(Generic[SourceType, ParamsType, ItemType], Dataset[ItemType],
 
         self.files: List[Path] = all_files
         self.items: List[SourceType] = []
-
-        self.did_init = False
-
-        if len(cache_dir) > 0:
-            self.cache_system: Optional[TensorCache[ItemType]] = TensorCache(cache_dir, 500*(1024**3))
-        else:
-            self.cache_system = None
 
     @abstractmethod
     def create_items(self) -> List[SourceType]:
@@ -87,34 +82,3 @@ class LocalDataset(Generic[SourceType, ParamsType, ItemType], Dataset[ItemType],
         self.items = self.create_items()
         self.apply_range_shuffle()
         self.did_init = True
-
-    def __len__(self) -> int:
-        if not self.did_init:
-            self.init_items()
-        return len(self.items)
-
-    def __getitem__(self, idx: int):
-        if not self.did_init:
-            self.init_items()
-
-        must_save_cache = False
-        item_input = self.items[idx]
-        item_hash = ""
-        # hashing
-        if self.cache_system is not None:
-            param_dict, dependent_paths = self.get_item_info(item_input)
-            item_hash = hash_dataset_entry((param_dict, item_input), dependent_paths)
-
-            if item_hash in self.cache_system:
-                #print(f"Cache hit, hash {item_hash}")
-                return self.cache_system[item_hash]
-            else:
-                #print(f"Cache miss, hash {item_hash}")
-                must_save_cache = True
-                # print("Cache miss: "+str(item_input))
-
-        items_tensors = self.load_item(item_input)
-
-        if must_save_cache and self.cache_system is not None:
-            self.cache_system[item_hash] = items_tensors
-        return items_tensors
