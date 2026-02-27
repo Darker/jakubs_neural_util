@@ -1,30 +1,22 @@
 from __future__ import annotations
-from typing import Generic, TypeVar, Optional
-import io
-import torch
-import lz4.frame
+
+from typing import TYPE_CHECKING
 
 import diskcache as dc
+import torch
+import zstandard as zstd
+from typing import Generic, Optional, TypeVar
 
-T = TypeVar("T") 
+if TYPE_CHECKING:
+    import io
 
-# import zstandard as zstd
-
-# cctx = zstd.ZstdCompressor(level=1, write_content_size=False)
-# dctx = zstd.ZstdDecompressor()
-
-# def compress(raw: bytes) -> bytes:
-#     return cctx.compress(raw)
-
-# def decompress(blob: bytes) -> bytes:
-#     return dctx.decompress(blob)
-
+T = TypeVar("T")
 
 class TensorCache(Generic[T]):
     """
     A safe, multiprocess-friendly, compressed tensor cache.
     - Values are serialized with torch.save
-    - Compressed with lz4
+    - Compressed with zstd
     - Stored as raw bytes in diskcache
     - Exposes [] operator
     """
@@ -35,21 +27,29 @@ class TensorCache(Generic[T]):
         size_limit: Optional[int] = None,
     ):
         self.cache = dc.Cache(path, size_limit=size_limit)
+        self.cctx = zstd.ZstdCompressor(level=1, threads=4)
+        self.dctx = zstd.ZstdDecompressor()
 
     # --------------------------
     # Public API
     # --------------------------
 
     def __setitem__(self, key: str, value: T) -> None:
+        # torch.save → zstd stream writer → BytesIO
         buf = io.BytesIO()
-        lzfile = lz4.frame.LZ4FrameFile(buf, mode="w")
-        torch.save(value, lzfile, _use_new_zipfile_serialization=False)
+        with self.cctx.stream_writer(buf) as compressor:
+            torch.save(value, compressor, _use_new_zipfile_serialization=False)
+
+        # diskcache reads the BytesIO and stores bytes
         self.cache.set(key, buf, read=True)
 
     def __getitem__(self, key: str) -> T:
-        stream = self.cache.get(key, read=True)
-        lzfile = lz4.frame.LZ4FrameFile(stream, mode="r")
-        return torch.load(lzfile, weights_only=True)
+        # diskcache returns readable stream containing compressed blob
+        stream: 'io.BufferedReader' = self.cache.get(key, read=True) # type: ignore
+
+        # zstd stream reader → torch.load
+        with self.dctx.stream_reader(stream, closefd=True) as reader:
+            return torch.load(reader, weights_only=True)
 
     def __contains__(self, key: str) -> bool:
         return key in self.cache
