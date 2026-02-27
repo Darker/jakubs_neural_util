@@ -3,9 +3,22 @@ from typing import Generic, TypeVar, Optional
 import io
 import torch
 import lz4.frame
+
 import diskcache as dc
 
 T = TypeVar("T") 
+
+# import zstandard as zstd
+
+# cctx = zstd.ZstdCompressor(level=1, write_content_size=False)
+# dctx = zstd.ZstdDecompressor()
+
+# def compress(raw: bytes) -> bytes:
+#     return cctx.compress(raw)
+
+# def decompress(blob: bytes) -> bytes:
+#     return dctx.decompress(blob)
+
 
 class TensorCache(Generic[T]):
     """
@@ -24,33 +37,19 @@ class TensorCache(Generic[T]):
         self.cache = dc.Cache(path, size_limit=size_limit)
 
     # --------------------------
-    # Serialization / compression
-    # --------------------------
-
-    @staticmethod
-    def _serialize(value: T) -> bytes:
-        buf = io.BytesIO()
-        torch.save(value, buf)
-        raw = buf.getvalue()
-        return lz4.frame.compress(raw)
-
-    @staticmethod
-    def _deserialize(blob: bytes) -> T:
-        raw = lz4.frame.decompress(blob)
-        buf = io.BytesIO(raw)
-        return torch.load(buf, weights_only=True)
-
-    # --------------------------
     # Public API
     # --------------------------
 
     def __setitem__(self, key: str, value: T) -> None:
-        blob = self._serialize(value)
-        self.cache[key] = blob
+        buf = io.BytesIO()
+        lzfile = lz4.frame.LZ4FrameFile(buf, mode="w")
+        torch.save(value, lzfile, _use_new_zipfile_serialization=False)
+        self.cache.set(key, buf, read=True)
 
     def __getitem__(self, key: str) -> T:
-        blob = self.cache[key]  # raises KeyError if missing
-        return self._deserialize(blob)
+        stream = self.cache.get(key, read=True)
+        lzfile = lz4.frame.LZ4FrameFile(stream, mode="r")
+        return torch.load(lzfile, weights_only=True)
 
     def __contains__(self, key: str) -> bool:
         return key in self.cache

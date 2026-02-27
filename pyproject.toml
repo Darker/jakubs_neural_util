@@ -1,6 +1,6 @@
 [project]
 name = "jakubs_neural_util"
-version = "0.1.5"
+version = "0.1.6"
 description = "My utilities for training neural networks"
 authors = [{ name = "Jakub" }]
 readme = "README.md"
