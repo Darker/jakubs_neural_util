@@ -3,10 +3,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Generic, Optional, Tuple, List, Dict, Any, TypeVar, cast, Union, TypedDict, TYPE_CHECKING
 
-import torch.nn.functional as F
 from torch.utils.data import Dataset
-
-import random
 
 from jakubs_neural_util.datasets.tensor_hashing import hash_dataset_entry
 from jakubs_neural_util.datasets.tensor_cache import TensorCache
@@ -71,6 +68,15 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
         Initialized list of items to cache
         '''
 
+    def get_item_hash(self, idx):
+        if not self.did_init:
+            self.init_items()
+        item_input = self.items[idx]
+        param_dict, dependent_paths = self.get_item_info(item_input)
+        item_hash = hash_dataset_entry((param_dict, item_input), dependent_paths)
+        return param_dict, item_hash
+
+
     def __len__(self) -> int:
         if not self.did_init:
             self.init_items()
@@ -85,8 +91,7 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
         item_hash = ""
         # hashing
         if self.cache_system is not None:
-            param_dict, dependent_paths = self.get_item_info(item_input)
-            item_hash = hash_dataset_entry((param_dict, item_input), dependent_paths)
+            param_dict, item_hash = self.get_item_hash(idx)
 
             if item_hash in self.cache_system:
                 #print(f"Cache hit, hash {item_hash}")
