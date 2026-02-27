@@ -74,7 +74,7 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
         item_input = self.items[idx]
         param_dict, dependent_paths = self.get_item_info(item_input)
         item_hash = hash_dataset_entry((param_dict, item_input), dependent_paths)
-        return param_dict, item_hash
+        return item_hash
 
 
     def __len__(self) -> int:
@@ -87,11 +87,11 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
             self.init_items()
 
         must_save_cache = False
-        item_input = self.items[idx]
+        
         item_hash = ""
         # hashing
         if self.cache_system is not None:
-            param_dict, item_hash = self.get_item_hash(idx)
+            item_hash = self.get_item_hash(idx)
 
             if item_hash in self.cache_system:
                 #print(f"Cache hit, hash {item_hash}")
@@ -100,6 +100,8 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
                 #print(f"Cache miss, hash {item_hash}")
                 must_save_cache = True
                 # print("Cache miss: "+str(item_input))
+                
+        item_input = self.items[idx]
 
         items_tensors = self.load_item(item_input)
 
