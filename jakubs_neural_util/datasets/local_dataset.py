@@ -22,6 +22,7 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[So
                  *,
                  glob_pattern: str = "*.json",
                  cache_dir: str = "",
+                 cache_max_size: int = 500*(1024**3),
                  is_validation: bool = False, 
                  subrange: Optional[Tuple[float, float]] = None,
                  subrange_is_percent: bool = False,
@@ -81,4 +82,3 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[So
     def init_items(self):
         self.items = self.create_items()
         self.apply_range_shuffle()
-        self.did_init = True

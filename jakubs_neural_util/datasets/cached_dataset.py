@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 
 from pathlib import Path
-from typing import Generic, Optional, Tuple, List, Dict, Any, TypeVar, cast, Union, TypedDict, TYPE_CHECKING
+from typing import Generic, Optional, Tuple, List, Dict, Any, TypeVar, cast, Union, TypedDict, TYPE_CHECKING, final
 
 from torch.utils.data import Dataset
 
@@ -17,7 +17,8 @@ ParamsType = TypeVar("ParamsType")
 class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorType], ABC):
     def __init__(self, 
                  *,
-                 cache_dir: str = ""
+                 cache_dir: str = "",
+                 cache_max_size: int = 500*(1024**3)
         ):
         """
         Args:
@@ -32,10 +33,9 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
 
         self.did_init = False
 
-        if len(cache_dir) > 0:
-            self.cache_system: Optional[TensorCache[TensorType]] = TensorCache(cache_dir, 500*(1024**3))
-        else:
-            self.cache_system = None
+        self.cache_system: Optional[TensorCache[TensorType]] = None
+        self.cache_dir = cache_dir
+        self.cache_max_size = cache_max_size
 
     def _typing_source_type(self) -> SourceType:
         if TYPE_CHECKING:
@@ -68,9 +68,17 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
         Initialized list of items to cache
         '''
 
+    @final
+    def base_init_items(self):
+        if not self.did_init:
+            if len(self.cache_dir) > 0:
+                self.cache_system = TensorCache(self.cache_dir, self.cache_max_size)
+            self.init_items()
+        self.did_init = True
+
     def get_item_hash(self, idx):
         if not self.did_init:
-            self.init_items()
+            self.base_init_items()
         item_input = self.items[idx]
         param_dict, dependent_paths = self.get_item_info(item_input)
         item_hash = hash_dataset_entry((param_dict, item_input), dependent_paths)
@@ -79,12 +87,12 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
 
     def __len__(self) -> int:
         if not self.did_init:
-            self.init_items()
+            self.base_init_items()
         return len(self.items)
 
     def __getitem__(self, idx: int):
         if not self.did_init:
-            self.init_items()
+            self.base_init_items()
 
         must_save_cache = False
         
@@ -100,7 +108,7 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
                 #print(f"Cache miss, hash {item_hash}")
                 must_save_cache = True
                 # print("Cache miss: "+str(item_input))
-                
+
         item_input = self.items[idx]
 
         items_tensors = self.load_item(item_input)

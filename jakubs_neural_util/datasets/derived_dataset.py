@@ -37,24 +37,16 @@ class DerivedDataset(
                  source: CachedDataset[SourceItemType, SourceParamsType, SourceTensorType],
                  *,
                  cache_dir: str = "",
-                 is_validation: bool = False, 
-                 subrange: Optional[Tuple[float, float]] = None,
-                 subrange_is_percent: bool = False,
-                 shuffle_seed: int = -1):
+                 cache_max_size: int = 500*(1024**3)):
         """
         Args:
             folder (str): Path to the folder containing *_image_meta.json files.
             is_validation (bool): Flag for validation split.
             subrange (Optional[Tuple[int,int]]): Optional (start, end) indices to restrict dataset.
         """
-        super().__init__(cache_dir=cache_dir)
+        super().__init__(cache_dir=cache_dir, cache_max_size=cache_max_size)
 
-        self.is_validation = is_validation
-        self.shuffle_seed = shuffle_seed
-        self.subrange = subrange
-        self.subrange_is_percent = subrange_is_percent
         self.source = source
-
         self.items: List[DerivedItemMapping] = []
 
     @staticmethod
@@ -94,37 +86,3 @@ def DerivedDataset_inherit(
         sourceType: Type[CachedDataset[INHSourceType, INHItemType, INHTensorType]],
         tensorType: Type[INHFinalTensorType])->Type[DerivedDataset[INHFinalTensorType, INHSourceType, INHItemType, INHTensorType]]:
     return DerivedDataset # type: ignore
-
-# class TestDerived(CachedDataset[Literal["source_type"], Literal["params_type"], Literal["tensor_type"]]):
-#     def create_items(self) -> List[Literal["source_type"]]:
-#         raise NotImplementedError
-
-#     def get_item_info(self, item: Literal["source_type"]) -> Tuple[Literal["params_type"], List[Path] | None]:
-#         raise NotImplementedError
-
-#     def load_item(self, item: Literal["source_type"]) ->  Literal["tensor_type"]:
-#         raise NotImplementedError
-
-#     def init_items(self):
-#         raise NotImplementedError
-
-
-# class TestDerivedImpl(DerivedDataset_inherit(TestDerived, list[float])):
-#     def __init__(self, source: TestDerived):
-#         super(TestDerivedImpl, self).__init__(source=source)
-
-#     def create_items(self) -> List[DerivedItemMapping]:
-#         raise NotImplementedError
-
-#     def load_item(self, item: DerivedItemMapping):
-#         raise NotImplementedError
-
-#     def init_items(self):
-#         raise NotImplementedError
-
-# # testDerInst = TestDerived()
-# # derivedInst = DerivedDataset(testDerInst, Type[list[float]])
-
-# implTest = TestDerivedImpl(TestDerived())
-
-# implTest.source.get_item_info("source_type")
