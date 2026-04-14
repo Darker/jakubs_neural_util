@@ -12,6 +12,7 @@ from jakubs_neural_util.datasets.cached_dataset import CachedDataset
 from jakubs_neural_util.datasets.tensor_hashing import hash_dataset_entry
 from jakubs_neural_util.datasets.tensor_cache import TensorCache
 
+# Type that typically has one value per item
 SourceType = TypeVar("SourceType")
 TensorType = TypeVar("TensorType")
 ParamsType = TypeVar("ParamsType")
@@ -33,7 +34,7 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[So
             is_validation (bool): Flag for validation split.
             subrange (Optional[Tuple[int,int]]): Optional (start, end) indices to restrict dataset.
         """
-        super().__init__(cache_dir=cache_dir)
+        super().__init__(cache_dir=cache_dir,cache_max_size=cache_max_size)
         self.folder = Path(folder)
         self.is_validation = is_validation
         self.shuffle_seed = shuffle_seed
@@ -50,14 +51,6 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[So
     def create_items(self) -> List[SourceType]:
         '''
         Must populate self.items
-        '''
-        pass
-    
-    @abstractmethod
-    def get_item_info(self, item: SourceType) -> tuple[ParamsType, Optional[List[Path]]]:
-        '''
-        Returns parsed item params and optionally list of paths it depends on
-        The paths are only used for hashing for cache
         '''
         pass
 

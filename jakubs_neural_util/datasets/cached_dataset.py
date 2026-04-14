@@ -18,7 +18,8 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
     def __init__(self, 
                  *,
                  cache_dir: str = "",
-                 cache_max_size: int = 500*(1024**3)
+                 cache_max_size: int = 500*(1024**3),
+                 compress: bool = True
         ):
         """
         Args:
@@ -36,6 +37,7 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
         self.cache_system: Optional[TensorCache[TensorType]] = None
         self.cache_dir = cache_dir
         self.cache_max_size = cache_max_size
+        self.cache_compress = compress
 
     def _typing_source_type(self) -> SourceType:
         if TYPE_CHECKING:
@@ -72,18 +74,26 @@ class CachedDataset(Generic[SourceType, ParamsType, TensorType], Dataset[TensorT
     def base_init_items(self):
         if not self.did_init:
             if len(self.cache_dir) > 0:
-                self.cache_system = TensorCache(self.cache_dir, self.cache_max_size)
+                self.cache_system = TensorCache(self.cache_dir, size_limit=self.cache_max_size, use_compression=self.cache_compress)
             self.init_items()
         self.did_init = True
 
     def get_item_hash(self, idx):
         if not self.did_init:
             self.base_init_items()
-        item_input = self.items[idx]
-        param_dict, dependent_paths = self.get_item_info(item_input)
-        item_hash = hash_dataset_entry((param_dict, item_input), dependent_paths)
-        return item_hash
 
+        hash_tuple, dependent_paths = self.get_item_hash_tuple(idx)
+
+        item_hash = hash_dataset_entry(hash_tuple, dependent_paths)
+        return item_hash
+    
+    def get_item_hash_tuple(self, index: int) -> 'tuple[tuple, list[Path]]':
+        '''
+        Override this to modify source items for hash purposes (ie. remove things that do not affect load_item)
+        '''
+        item_input = self.items[index]
+        param_dict, dependent_paths = self.get_item_info(item_input)
+        return  (param_dict, item_input), dependent_paths
 
     def __len__(self) -> int:
         if not self.did_init:

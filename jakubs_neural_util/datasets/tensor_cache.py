@@ -7,8 +7,7 @@ import torch
 import zstandard as zstd
 from typing import Generic, Optional, TypeVar
 
-if TYPE_CHECKING:
-    import io
+import io
 
 T = TypeVar("T")
 
@@ -24,32 +23,50 @@ class TensorCache(Generic[T]):
     def __init__(
         self,
         path: str,
+        *,
         size_limit: Optional[int] = None,
+        use_compression: bool = False
     ):
         self.cache = dc.Cache(path, size_limit=size_limit)
-        self.cctx = zstd.ZstdCompressor(level=1, threads=4)
-        self.dctx = zstd.ZstdDecompressor()
+        if use_compression:
+            self.cctx = zstd.ZstdCompressor(level=1, threads=4)
+            self.dctx = zstd.ZstdDecompressor()
+        else:
+            self.cctx = None
+            self.dctx = None
+        self.use_compression = use_compression
 
     # --------------------------
     # Public API
     # --------------------------
 
     def __setitem__(self, key: str, value: T) -> None:
-        # torch.save → zstd stream writer → BytesIO
         buf = io.BytesIO()
-        with self.cctx.stream_writer(buf) as compressor:
-            torch.save(value, compressor, _use_new_zipfile_serialization=False)
-
+        if self.use_compression:
+            with self.cctx.stream_writer(buf, closefd=False) as compressor:
+                torch.save(value, compressor, _use_new_zipfile_serialization=False)
+        else:
+            torch.save(value, buf, _use_new_zipfile_serialization=False)
+        buf.seek(0)
         # diskcache reads the BytesIO and stores bytes
         self.cache.set(key, buf, read=True)
 
-    def __getitem__(self, key: str) -> T:
-        # diskcache returns readable stream containing compressed blob
-        stream: 'io.BufferedReader' = self.cache.get(key, read=True) # type: ignore
+    def __getitem__(self, key: str):
+        stream = self.cache.get(key, read=True)
 
-        # zstd stream reader → torch.load
-        with self.dctx.stream_reader(stream, closefd=True) as reader:
-            return torch.load(reader, weights_only=True)
+        if self.use_compression:
+            with self.dctx.stream_reader(stream, closefd=True) as reader:
+                bytes_out = io.BytesIO()
+                while True:
+                    chunk = reader.read(1024*1024*4)
+                    if not chunk:
+                        break
+                    bytes_out.write(chunk)
+
+            bytes_out.seek(0)
+        else:
+            bytes_out = stream
+        return torch.load(bytes_out, weights_only=True)
 
     def __contains__(self, key: str) -> bool:
         return key in self.cache
