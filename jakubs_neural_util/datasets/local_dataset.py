@@ -22,6 +22,7 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[So
                  folder: str,
                  *,
                  glob_pattern: str = "*.json",
+                 recursive_glob: bool = False,
                  cache_dir: str = "",
                  cache_max_size: int = 500*(1024**3),
                  is_validation: bool = False, 
@@ -34,7 +35,13 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[So
             is_validation (bool): Flag for validation split.
             subrange (Optional[Tuple[int,int]]): Optional (start, end) indices to restrict dataset.
         """
-        super().__init__(cache_dir=cache_dir,cache_max_size=cache_max_size)
+        super().__init__(
+            cache_dir=cache_dir,
+            cache_max_size=cache_max_size,
+            subrange=subrange,
+            subrange_is_percent=subrange_is_percent,
+            shuffle_seed=shuffle_seed)
+        
         self.folder = Path(folder)
         self.is_validation = is_validation
         self.shuffle_seed = shuffle_seed
@@ -42,36 +49,23 @@ class LocalDataset(CachedDataset[SourceType, ParamsType, TensorType], Generic[So
         self.subrange_is_percent = subrange_is_percent
 
         # Collect all JSON files ending with _image_meta.json
-        all_files = sorted(self.folder.glob(glob_pattern))
 
-        self.files: List[Path] = all_files
-        self.items: List[SourceType] = []
+        self.glob_pattern = glob_pattern
+        self.recursive_glob = recursive_glob
+        self.files: List[Path] = []
+
+    def count_items(self) -> Optional[List[SourceType]]:
+        globres = self.folder.glob(self.glob_pattern) if not self.recursive_glob else self.folder.rglob(self.glob_pattern)
+        self.files = sorted(globres)
 
     @abstractmethod
-    def create_items(self) -> List[SourceType]:
-        '''
-        Must populate self.items
-        '''
+    def get_real_len(self) -> int:
         pass
 
     @abstractmethod
     def load_item(self, item: SourceType) -> TensorType:
         pass
 
-    def apply_range_shuffle(self):
-        if self.shuffle_seed > 0:
-            random.Random(self.shuffle_seed).shuffle(self.items)
-        total_files = len(self.items)
-
-        if self.subrange is not None:
-            if self.subrange_is_percent:
-                start = int(total_files * self.subrange[0])
-                end   = int(total_files * self.subrange[1])
-            else:
-                start, end = self.subrange
-
-            self.items = self.items[start:end]
-
+    @abstractmethod
     def init_items(self):
-        self.items = self.create_items()
-        self.apply_range_shuffle()
+        pass

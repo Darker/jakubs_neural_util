@@ -47,20 +47,27 @@ class DerivedDataset(
         super().__init__(cache_dir=cache_dir, cache_max_size=cache_max_size)
 
         self.source = source
-        self.items: List[DerivedItemMapping] = []
 
     @staticmethod
     def get_type(base: Type[CachedDataset[SourceParamsType, SourceItemType, SourceTensorType]], tensorType: TTypeVarStaticTensor):
         return DerivedDataset[TTypeVarStaticTensor, SourceParamsType, SourceItemType, SourceTensorType]
 
     @abstractmethod
-    def create_items(self) -> List[DerivedItemMapping]:
+    def count_items(self):
+        pass
+
+    @abstractmethod
+    def get_real_len(self) -> int:
+        pass
+
+    @abstractmethod
+    def get_item_source_impl(self, idx: int) -> DerivedItemMapping:
         pass
     
     def get_item_info(self, item: DerivedItemMapping) -> tuple[list[SourceParamsType], Optional[List[Path]]]:
         items: list[SourceItemType] = []
         for index in item.source_indices:
-            items.append(self.source.items[index])
+            items.append(self.source.get_item_source(index))
 
         # Now load all the items metadata
         source_infos: list[SourceParamsType] = []
